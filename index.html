@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>부산 3박 4일 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* 레이아웃: 위에 실제 지도, 아래에 날짜별 일정표. 폰 한 열 기준. 단일 라이트 테마. */
+  color-scheme: light;
+  --paper: #eef1f3;
+  --surface: #fcfcfb;
+  --ink: #12202e;
+  --muted: #56636f;
+  --line: #d3dae0;
+  --d1: #2a78d6;
+  --d2: #eda100;
+  --d3: #1baf7a;
+  --d4: #e87ba4;
+  --mark-ink: #0b0b0b;
+  --font-display: "Do Hyeon", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+header { display: flex; flex-direction: column; gap: 4px; }
+h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.sub { margin: 0; color: var(--muted); font-size: 14px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 6px 12px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink);
+  font: 500 14px/1 var(--font-body);
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.chip svg, .day-head svg, .badge svg { flex: none; display: block; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.mapwrap {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  width: 100%;
+  height: 440px;
+}
+#map { width: 100%; height: 100%; font-family: var(--font-body); }
+.mapmsg {
+  position: absolute; inset: 0;
+  display: none; align-items: center; justify-content: center;
+  padding: 24px; text-align: center; color: var(--muted); font-size: 14px;
+}
+.mapwrap.failed .mapmsg { display: flex; }
+.mapwrap.failed #map { display: none; }
+
+.pin { background: none; border: 0; }
+.pin svg { display: block; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); overflow: visible; }
+.tip {
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 1px 6px; font: 500 12px/1.5 var(--font-body);
+  box-shadow: none;
+}
+.tip::before { display: none; }
+.leaflet-popup-content { margin: 12px 14px; font: 400 14px/1.5 var(--font-body); color: var(--ink); }
+.pop .when { display: block; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pop .name { display: block; font-weight: 700; font-size: 15px; line-height: 1.35; }
+.pop .note { display: block; font-size: 13px; }
+.pop .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 13px; }
+a { color: var(--ink); text-underline-offset: 3px; }
+
+.day { display: flex; flex-direction: column; gap: 2px; }
+.day-head {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0 4px;
+  font-family: var(--font-display); font-weight: 400; font-size: 21px; line-height: 1.2;
+}
+.day-head small { font-family: var(--font-body); font-size: 13px; color: var(--muted); }
+.row {
+  display: flex; align-items: stretch; gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.row.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.pick {
+  flex: 1 1 auto; min-width: 0;
+  display: grid; grid-template-columns: 26px 46px 1fr; column-gap: 8px; align-items: start;
+  padding: 10px 4px 10px 10px;
+  background: none; border: 0; text-align: left; color: inherit;
+  font: inherit; cursor: pointer; border-radius: 10px;
+}
+.badge { padding-top: 1px; }
+.time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.what { min-width: 0; }
+.what b { display: block; font-weight: 700; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+.what span { display: block; color: var(--muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.nav {
+  flex: none; display: flex; align-items: center;
+  padding: 0 12px; font-size: 13px; white-space: nowrap;
+  border-left: 1px solid var(--line);
+}
+.foot { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>부산 3박 4일 지도</h1>
+    <p class="sub">2026.11.20(금) ~ 11.23(월) · 숙소 호텔 토브(남포)</p>
+  </header>
+
+  <div class="chips" id="chips" role="group" aria-label="날짜 선택"></div>
+
+  <div class="mapwrap" id="mapwrap">
+    <div id="map" role="application" aria-label="일정 장소를 찍은 지도. 아래 일정표에 같은 내용이 있어요."></div>
+    <div class="mapmsg">지도를 불러오지 못했어요. 인터넷에 연결된 상태에서 브라우저로 다시 열어 주세요. 아래 일정표는 그대로 볼 수 있어요.</div>
+  </div>
+
+  <div id="list"></div>
+
+  <ul class="foot">
+    <li>선은 방문 순서를 잇는 직선이라 실제 길과 달라요. 길찾기는 장소 옆 '네이버지도'를 눌러 주세요.</li>
+    <li>배경에 영어 경고 문구가 찍히거나 회색으로만 보이면 지도 오른쪽 위 단추에서 '지도 2', '지도 3', '지도 4'로 바꿔 보세요.</li>
+    <li>좌표 출처: Google 지도 장소 검색. 2026-11-20 기준 일정.</li>
+  </ul>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  'use strict';
+  var HOTEL = { name: '호텔 토브', lat: 35.1015365, lng: 129.0346647, q: '호텔 토브 부산' };
+
+  var DAYS = [
+    { id: 1, label: '1일차', dow: '금', date: '11/20', color: '#2a78d6', shape: 'circle', stops: [
+      { t: '14:00', name: '노포 부산종합버스터미널', short: '노포 터미널', lat: 35.2847494, lng: 129.0953841, note: '1호선 노포역 → 남포역, 환승 없이 약 50분', q: '부산종합버스터미널' },
+      { t: '15:00', hotel: true, name: '호텔 토브 입실', note: '짐 두기. 조식 가격과 주문 방식 확인' },
+      { t: '15:20', name: '이재모피자 본점', short: '이재모피자', lat: 35.1021046, lng: 129.0305985, note: '호텔에서 380m. 도착하면 바로 대기 등록', q: '이재모피자 본점' },
+      { t: '17:10', name: '부산타워', lat: 35.1011913, lng: 129.0323697, note: '일몰 17:13부터 야경까지', q: '부산타워' },
+      { t: '18:15', name: '고래사어묵 자갈치점', short: '고래사어묵', lat: 35.0971027, lng: 129.028521, note: '포장. 금요일 19시 마감', q: '고래사어묵 자갈치점' },
+      { t: '18:30', name: 'BIFF광장 · 부평깡통시장 야시장', short: '부평깡통시장', lat: 35.1017293, lng: 129.0262744, note: '호텔까지 760m', q: '부평깡통시장' },
+      { hotel: true, routeOnly: true }
+    ] },
+    { id: 2, label: '2일차', dow: '토', date: '11/21', color: '#eda100', shape: 'square', stops: [
+      { t: '09:00', hotel: true, name: '호텔 조식', note: '10:00 출발. 1호선 남포역 → 부전역 약 20분' },
+      { t: '10:25', name: '부전시장', lat: 35.1627269, lng: 129.0613381, note: '30분 구경', q: '부전시장' },
+      { t: '11:50', name: '해동용궁사', lat: 35.1884543, lng: 129.2231109, note: '부전역에서 동해선 30분, 오시리아역에서 버스나 택시', q: '해동용궁사' },
+      { t: '13:00', name: '해변열차 송정정거장', short: '송정정거장', lat: 35.1808823, lng: 129.2002747, note: '택시 8분. 1회권 1인 10,000원, 토요일이라 예매 권장', q: '해운대블루라인파크 송정정거장' },
+      { t: '13:25', name: '청사포 다릿돌전망대', short: '다릿돌전망대', lat: 35.1640365, lng: 129.1967173, note: '구경 후 청사포까지 530m 도보', q: '청사포 다릿돌전망대' },
+      { t: '14:15', name: '에케(ECKE)', short: '에케', lat: 35.1613039, lng: 129.1833402, note: '780m 오르막. 점심', q: '에케 해운대' },
+      { t: '16:00', name: '밀락더마켓', lat: 35.1541919, lng: 129.1270348, note: '택시. 30분', q: '밀락더마켓' },
+      { t: '16:35', name: '프론트커피', lat: 35.1547045, lng: 129.1199615, note: '650m 도보. 일몰 17:13', q: '프론트커피 민락동' },
+      { t: '17:40', name: '자갈치횟집(광안동)', short: '자갈치횟집', lat: 35.1665589, lng: 129.1170079, note: '예약 권장', q: '자갈치횟집 광안동' },
+      { t: '19:00', name: '광안리 드론쇼', short: '드론쇼', lat: 35.1531696, lng: 129.118666, note: '레이저쇼 회차. 21시 2회차도 있음', q: '광안리해수욕장', link: { href: 'https://www.gwangallimdrone.co.kr/', text: '드론쇼 공식 홈페이지' } },
+      { t: '19:40', name: '황령산전망대', lat: 35.1572513, lng: 129.08168, note: '택시 왕복. 내려오는 차가 잘 안 잡혀요', q: '황령산 전망대' },
+      { t: '21:00', hotel: true, name: '호텔 도착', note: '' }
+    ] },
+    { id: 3, label: '3일차', dow: '일', date: '11/22', color: '#1baf7a', shape: 'diamond', stops: [
+      { t: '09:00', hotel: true, name: '호텔 조식', note: '10:00 출발' },
+      { t: '10:15', name: '모모스커피 영도 로스터리', short: '모모스커피', lat: 35.0961199, lng: 129.042549, note: '호텔에서 940m', q: '모모스커피 영도' },
+      { t: '11:25', name: '국립해양박물관', lat: 35.0783256, lng: 129.0798565, note: '버스. 월요일 휴관이라 일요일에', q: '국립해양박물관' },
+      { t: '13:00', name: '흰여울문화마을', lat: 35.0782798, lng: 129.0453198, note: '점심', q: '흰여울문화마을' },
+      { t: '14:45', name: '아미산전망대', lat: 35.052623, lng: 128.9607113, note: '택시 약 30분. 17시 입장 마감', q: '아미산전망대' },
+      { t: '15:45', name: '다대포해수욕장', lat: 35.0469015, lng: 128.9662387, note: '800m 도보. 일몰 17:13. 17:30 1호선으로 자갈치역', q: '다대포해수욕장' },
+      { t: '18:15', name: '부평 족발골목', short: '족발골목', lat: 35.0994375, lng: 129.0263125, note: '냉채족발 저녁. 호텔까지 790m', q: '부평족발골목' },
+      { hotel: true, routeOnly: true }
+    ] },
+    { id: 4, label: '4일차', dow: '월', date: '11/23', color: '#e87ba4', shape: 'hex', stops: [
+      { t: '08:30', hotel: true, name: '호텔 조식', note: '10:00 체크아웃, 짐은 호텔에 보관' },
+      { t: '10:20', name: '롯데백화점 광복점', short: '롯데백화점', lat: 35.0981871, lng: 129.0366183, note: '10:30 개점에 맞춰 디저트', q: '롯데백화점 광복점' },
+      { t: '11:45', name: '천마산하늘전망대', short: '천마산전망대', lat: 35.0935516, lng: 129.01737, note: '택시', q: '천마산하늘전망대' },
+      { t: '12:15', name: '감천문화마을', lat: 35.0973935, lng: 129.0105921, note: '점심 포함 13:45까지. 마을버스로 토성역', q: '감천문화마을' },
+      { t: '14:30', hotel: true, name: '호텔에서 짐 찾기', note: '남포역 → 부산역 2정거장' },
+      { t: '15:15', name: '차이나타운 · 신발원', short: '차이나타운', lat: 35.1148951, lng: 129.0387676, note: '구경 후 16:30 이른 저녁. 줄이 길면 옆집 마가만두', q: '신발원' },
+      { t: '18:00', name: '삼진어묵 부산역광장점', short: '삼진어묵', lat: 35.1161924, lng: 129.0413676, note: '포장', q: '삼진어묵 부산역광장점' },
+      { t: '19:00', name: '부산역 KTX', short: '부산역', lat: 35.114495, lng: 129.03933, note: '', q: '부산역' }
+    ] }
+  ];
+
+  var ALL = {};
+  DAYS.forEach(function (d) {
+    var n = 0;
+    d.route = [];
+    d.stops.forEach(function (s, i) {
+      s.day = d;
+      if (s.hotel) { s.lat = HOTEL.lat; s.lng = HOTEL.lng; s.key = 'd' + d.id + 'h' + i; s.q = HOTEL.q; }
+      else { n += 1; s.n = n; s.key = 'd' + d.id + 's' + n; }
+      d.route.push([s.lat, s.lng]);
+      if (!s.routeOnly) ALL[s.key] = s;
+    });
+  });
+
+  var wrap = document.getElementById('mapwrap');
+  var list = document.getElementById('list');
+  var chips = document.getElementById('chips');
+  var state = { filter: 'all', sel: null };
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function naver(q) { return 'https://map.naver.com/p/search/' + encodeURIComponent(q); }
+
+  function shapeEl(shape, r, fill) {
+    var st = ' fill="' + fill + '" stroke="#fcfcfb" stroke-width="2"';
+    if (shape === 'square') return '<rect' + st + ' x="' + (-r * 0.92) + '" y="' + (-r * 0.92) + '" width="' + (r * 1.84) + '" height="' + (r * 1.84) + '" rx="3"/>';
+    if (shape === 'diamond') { var d = r * 1.22; return '<polygon' + st + ' points="0,' + (-d) + ' ' + d + ',0 0,' + d + ' ' + (-d) + ',0"/>'; }
+    if (shape === 'hex') {
+      var pts = [];
+      for (var i = 0; i < 6; i++) { var a = Math.PI / 6 + i * Math.PI / 3; pts.push((Math.cos(a) * r * 1.12).toFixed(2) + ',' + (Math.sin(a) * r * 1.12).toFixed(2)); }
+      return '<polygon' + st + ' points="' + pts.join(' ') + '"/>';
+    }
+    if (shape === 'hotel') return '<rect fill="#12202e" stroke="#fcfcfb" stroke-width="2" x="' + (-r) + '" y="' + (-r) + '" width="' + (2 * r) + '" height="' + (2 * r) + '" rx="4"/>';
+    return '<circle' + st + ' r="' + r + '"/>';
+  }
+  function icon(shape, color, text, size) {
+    var r = size / 2 - 3;
+    var tf = shape === 'hotel' ? '#fcfcfb' : '#0b0b0b';
+    var txt = text ? '<text x="0" y="0" text-anchor="middle" dominant-baseline="central" font-family="Noto Sans KR, sans-serif" font-size="11" font-weight="700" fill="' + tf + '">' + esc(text) + '</text>' : '';
+    return '<svg width="' + size + '" height="' + size + '" viewBox="' + (-size / 2) + ' ' + (-size / 2) + ' ' + size + ' ' + size + '" aria-hidden="true">' + shapeEl(shape, r, color) + txt + '</svg>';
+  }
+
+  function popupHtml(s) {
+    var when = s.day ? s.day.label + ' ' + s.day.dow + ' ' + s.day.date + (s.t ? ' · ' + s.t : '') : '3박 숙소';
+    var links = '<a href="' + naver(s.q) + '" target="_blank" rel="noopener">네이버지도에서 열기</a>';
+    if (s.link) links += '<a href="' + s.link.href + '" target="_blank" rel="noopener">' + esc(s.link.text) + '</a>';
+    return '<div class="pop"><span class="when">' + esc(when) + '</span><span class="name">' + esc(s.name) + '</span>'
+      + (s.note ? '<span class="note">' + esc(s.note) + '</span>' : '') + '<span class="links">' + links + '</span></div>';
+  }
+
+  // ---------- 지도 ----------
+  var map = null, layer = null, markers = {}, hotelMarker = null;
+  function visibleDays() { return state.filter === 'all' ? DAYS : DAYS.filter(function (d) { return d.id === state.filter; }); }
+
+  function initMap() {
+    if (!window.L) { wrap.classList.add('failed'); return; }
+    map = L.map('map', { zoomControl: true });
+    // 열쇠(API key) 없이 쓸 수 있는 오픈스트리트맵 계열 서버들. 위에서부터 차례로 시도.
+    var OSMC = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자';
+    var bases = [
+      { name: '지도 1 (OSM 기본)', layer: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: OSMC }) },
+      { name: '지도 2 (OSM HOT)', layer: L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19, attribution: OSMC + ', HOT, OSM France' }) },
+      { name: '지도 3 (OSM 독일)', layer: L.tileLayer('https://tile.openstreetmap.de/{z}/{x}/{y}.png', { maxZoom: 18, attribution: OSMC }) },
+      { name: '지도 4 (지형도)', layer: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 17, attribution: OSMC + ', SRTM | <a href="https://opentopomap.org">OpenTopoMap</a>' }) }
+    ];
+    var current = 0, choices = {};
+    bases.forEach(function (b, i) {
+      var loaded = 0, errors = 0;
+      choices[b.name] = b.layer;
+      b.layer.on('tileload', function () { loaded += 1; });
+      b.layer.on('tileerror', function () {
+        errors += 1;
+        // 한 장도 못 받았으면 다음 서버로 자동 전환
+        if (i === current && loaded === 0 && errors >= 4 && i + 1 < bases.length) {
+          map.removeLayer(b.layer); current = i + 1; bases[current].layer.addTo(map);
+        }
+      });
+    });
+    map.on('baselayerchange', function (e) {
+      for (var i = 0; i < bases.length; i++) if (bases[i].layer === e.layer) current = i;
+    });
+    bases[0].layer.addTo(map);
+    L.control.layers(choices, null, { position: 'topright' }).addTo(map);
+    L.control.scale({ imperial: false }).addTo(map);
+    layer = L.layerGroup().addTo(map);
+    map.on('popupclose', function () { state.sel = null; markRows(); });
+    draw(true);
+  }
+
+  function draw(refit) {
+    if (!map) return;
+    layer.clearLayers();
+    markers = {};
+    var allMode = state.filter === 'all';
+    var bounds = [[HOTEL.lat, HOTEL.lng]];
+    visibleDays().forEach(function (d) {
+      L.polyline(d.route, { color: '#12202e', weight: allMode ? 5 : 7, opacity: 0.3, interactive: false }).addTo(layer);
+      L.polyline(d.route, { color: d.color, weight: allMode ? 3 : 4, opacity: 0.95, interactive: false }).addTo(layer);
+      d.stops.forEach(function (s) {
+        if (s.hotel) return;
+        bounds.push([s.lat, s.lng]);
+        var size = allMode ? 20 : 30;
+        var m = L.marker([s.lat, s.lng], {
+          icon: L.divIcon({ className: 'pin', html: icon(d.shape, d.color, allMode ? '' : String(s.n), size), iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2] }),
+          title: d.label + ' ' + s.t + ' ' + s.name,
+          keyboard: false
+        }).addTo(layer);
+        m.bindPopup(popupHtml(s));
+        if (!allMode) m.bindTooltip(s.short || s.name, { permanent: true, direction: 'right', offset: [size / 2 + 2, 0], className: 'tip' });
+        m.on('click', function () { state.sel = s.key; markRows(); });
+        markers[s.key] = m;
+      });
+    });
+    hotelMarker = L.marker([HOTEL.lat, HOTEL.lng], {
+      icon: L.divIcon({ className: 'pin', html: icon('hotel', '', 'H', 30), iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15] }),
+      title: '호텔 토브', keyboard: false, zIndexOffset: 500
+    }).addTo(layer);
+    hotelMarker.bindPopup(popupHtml({ name: '호텔 토브', note: '입실 15:00, 퇴실 11:00. 조식 07:00~10:00', q: HOTEL.q }));
+    if (refit) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 16 });
+  }
+
+  // ---------- 날짜 단추, 일정표 ----------
+  function markRows() {
+    var rows = list.querySelectorAll('.row');
+    for (var i = 0; i < rows.length; i++) rows[i].classList.toggle('on', rows[i].getAttribute('data-key') === state.sel);
+  }
+
+  function drawChips() {
+    var h = '<button type="button" class="chip" data-f="all" aria-pressed="' + (state.filter === 'all') + '">전체</button>';
+    DAYS.forEach(function (d) {
+      h += '<button type="button" class="chip" data-f="' + d.id + '" aria-pressed="' + (state.filter === d.id) + '">' + icon(d.shape, d.color, '', 18) + d.label + ' ' + d.dow + '</button>';
+    });
+    chips.innerHTML = h;
+  }
+  chips.addEventListener('click', function (e) {
+    var b = e.target.closest('.chip'); if (!b) return;
+    var f = b.getAttribute('data-f');
+    state.filter = f === 'all' ? 'all' : Number(f);
+    state.sel = null;
+    drawChips(); markRows(); draw(true);
+  });
+
+  function drawList() {
+    var h = '';
+    DAYS.forEach(function (d) {
+      h += '<section class="day"><h2 class="day-head">' + icon(d.shape, d.color, '', 20) + d.label + ' <small>' + d.dow + ' ' + d.date + '</small></h2>';
+      d.stops.forEach(function (s) {
+        if (s.routeOnly) return;
+        var badge = s.hotel ? icon('hotel', '', 'H', 24) : icon(d.shape, d.color, String(s.n), 24);
+        h += '<div class="row" data-key="' + s.key + '"><button type="button" class="pick" data-key="' + s.key + '">'
+          + '<span class="badge">' + badge + '</span><span class="time">' + esc(s.t) + '</span>'
+          + '<span class="what"><b>' + esc(s.name) + '</b>' + (s.note ? '<span>' + esc(s.note) + '</span>' : '') + '</span></button>'
+          + '<a class="nav" href="' + naver(s.q) + '" target="_blank" rel="noopener" aria-label="' + esc(s.name) + ' 네이버지도에서 열기">네이버지도</a></div>';
+      });
+      h += '</section>';
+    });
+    list.innerHTML = h;
+  }
+  list.addEventListener('click', function (e) {
+    var b = e.target.closest('.pick'); if (!b) return;
+    var key = b.getAttribute('data-key'), s = ALL[key];
+    if (!s) return;
+    state.sel = key;
+    if (state.filter !== s.day.id) { state.filter = s.day.id; drawChips(); draw(false); }
+    markRows();
+    if (map) {
+      var m = s.hotel ? hotelMarker : markers[key];
+      map.setView([s.lat, s.lng], Math.max(map.getZoom(), 15));
+      if (m) { m.openPopup(); state.sel = key; markRows(); }
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      wrap.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    }
+  });
+
+  drawChips(); drawList(); initMap();
+})();
+</script>
+</body>
+</html>
